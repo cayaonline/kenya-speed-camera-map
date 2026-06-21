@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# Generated build artifacts — rebuilt by ./run.sh and by CI.
+# The CSVs in data/ are the source of truth; these are derived.
+output/
+app/data.js
+data/cameras_geocoded.csv
+
+# macOS
+.DS_Store

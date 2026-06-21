@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kenya Speed Limit &amp; Camera Enforcement Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel-2:#1c232d; --line:#2a3340;
+    --ink:#e8edf3; --muted:#8b97a6; --faint:#5b6675;
+    --green:#2ecc71; --orange:#f39c12; --red:#e74c3c;
+    --grey:#7f8c9a; --purple:#9b59b6; --yellow:#f1c40f; --accent:#36b3ff;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:var(--sans);background:var(--bg);color:var(--ink);overflow:hidden}
+  #app{display:flex;height:100vh}
+  /* ---- sidebar ---- */
+  #side{width:340px;flex:0 0 340px;background:var(--panel);border-right:1px solid var(--line);
+        display:flex;flex-direction:column;overflow:hidden}
+  #brand{padding:16px 18px 12px;border-bottom:1px solid var(--line)}
+  #brand h1{font-size:15px;margin:0;letter-spacing:.2px;line-height:1.3}
+  #brand .tag{font-size:11px;color:var(--muted);margin-top:4px;display:block}
+  #brand .pill{display:inline-block;margin-top:9px;font-size:10px;letter-spacing:.4px;
+        text-transform:uppercase;color:#cfe9ff;background:#0d2b3e;border:1px solid #1d4a66;
+        padding:3px 7px;border-radius:4px}
+  #side .scroll{overflow-y:auto;padding:14px 18px 80px}
+  .grp{margin-bottom:18px}
+  .grp h2{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--faint);
+        margin:0 0 9px;font-weight:600}
+  .search{width:100%;padding:9px 11px;background:var(--panel-2);border:1px solid var(--line);
+        color:var(--ink);border-radius:7px;font-size:13px;outline:none}
+  .search:focus{border-color:var(--accent)}
+  .chk{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;color:#cdd6e0;cursor:pointer}
+  .chk input{accent-color:var(--accent);width:15px;height:15px}
+  .swatch{width:13px;height:13px;border-radius:3px;flex:0 0 13px}
+  .swatch.line{height:4px;border-radius:2px;width:18px}
+  select{width:100%;padding:8px 10px;background:var(--panel-2);border:1px solid var(--line);
+        color:var(--ink);border-radius:7px;font-size:13px}
+  .legend .row{display:flex;align-items:center;gap:9px;padding:4px 0;font-size:12px;color:#c2cbd6}
+  .count{font-size:11px;color:var(--faint);margin-top:8px;font-family:var(--mono)}
+  .disc{font-size:10.5px;line-height:1.5;color:var(--muted);background:var(--panel-2);
+        border:1px solid var(--line);border-left:3px solid var(--yellow);padding:9px 11px;border-radius:6px}
+  /* ---- map ---- */
+  #map{flex:1;background:#0b0e12}
+  .leaflet-popup-content-wrapper{background:#10151c;color:var(--ink);border-radius:9px;
+        border:1px solid var(--line)}
+  .leaflet-popup-tip{background:#10151c;border:1px solid var(--line)}
+  .leaflet-popup-content{margin:13px 15px;font-size:12.5px;line-height:1.5}
+  .pop h3{margin:0 0 3px;font-size:14px}
+  .pop .road{color:var(--muted);font-size:11px;margin-bottom:9px}
+  .pop .big{font-family:var(--mono);font-size:22px;font-weight:600;margin:2px 0}
+  .pop .big small{font-size:11px;color:var(--muted);font-weight:400}
+  .pop table{width:100%;border-collapse:collapse;margin-top:8px}
+  .pop td{padding:3px 0;vertical-align:top;font-size:12px}
+  .pop td.k{color:var(--faint);white-space:nowrap;padding-right:10px;width:96px}
+  .pop a{color:var(--accent)}
+  .badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10.5px;font-weight:600;
+        text-transform:uppercase;letter-spacing:.3px}
+  .pop .note{margin-top:9px;padding:8px 9px;background:#1a1408;border:1px solid #3a2e0c;
+        border-radius:6px;font-size:11.5px;color:#e8d9a8}
+  .conf-bar{height:5px;border-radius:3px;background:#222b35;margin-top:7px;overflow:hidden}
+  .conf-bar i{display:block;height:100%}
+  #legendToggle{cursor:pointer}
+  @media(max-width:760px){#side{position:absolute;z-index:1000;height:100%;
+        transform:translateX(-100%);transition:.25s}#side.open{transform:none}
+        #burger{display:flex !important}}
+  #burger{display:none;position:absolute;z-index:1001;top:12px;left:12px;width:40px;height:40px;
+        border-radius:8px;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+        align-items:center;justify-content:center;font-size:18px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="app">
+  <button id="burger">☰</button>
+  <aside id="side">
+    <div id="brand">
+      <h1>Kenya Speed Limit &amp; Camera Enforcement Map</h1>
+      <span class="tag">Public-source aggregation with confidence scoring</span>
+      <span class="pill">MVP · not an official NTSA map</span>
+    </div>
+    <div class="scroll">
+      <div class="grp">
+        <h2>Search road or place</h2>
+        <input id="search" class="search" placeholder="e.g. Thika, Mombasa Rd, Pangani…" />
+        <div class="count" id="resultCount"></div>
+      </div>
+
+      <div class="grp">
+        <h2>Layers</h2>
+        <label class="chk"><input type="checkbox" id="lyrZones" checked> Speed zones (segments)</label>
+        <label class="chk"><input type="checkbox" id="lyrCameras" checked> Camera anchors (points)</label>
+      </div>
+
+      <div class="grp">
+        <h2>Confidence</h2>
+        <label class="chk"><input type="checkbox" class="fConf" value="high" checked>
+          <span class="swatch" style="background:var(--green)"></span> High (75+)</label>
+        <label class="chk"><input type="checkbox" class="fConf" value="medium" checked>
+          <span class="swatch" style="background:var(--orange)"></span> Medium (50–74)</label>
+        <label class="chk"><input type="checkbox" class="fConf" value="low" checked>
+          <span class="swatch" style="background:var(--grey)"></span> Low (&lt;50)</label>
+      </div>
+
+      <div class="grp">
+        <h2>Source type</h2>
+        <select id="fSource">
+          <option value="">All sources</option>
+          <option value="law">Law / statute</option>
+          <option value="official_agency">Official agency</option>
+          <option value="media">Media</option>
+          <option value="field_observation">Field observation</option>
+          <option value="osm">OpenStreetMap</option>
+          <option value="inferred">Inferred</option>
+        </select>
+      </div>
+
+      <div class="grp">
+        <h2>Vehicle class</h2>
+        <select id="fVehicle">
+          <option value="">All vehicles</option>
+          <option value="private">Private / light</option>
+          <option value="psv_commercial">PSV / commercial</option>
+          <option value="all">Applies to all</option>
+        </select>
+      </div>
+
+      <div class="grp legend">
+        <h2 id="legendToggle">Legend ▾</h2>
+        <div id="legendBody">
+          <div class="row"><span class="swatch line" style="background:var(--red)"></span> Camera-enforced zone</div>
+          <div class="row"><span class="swatch line" style="background:var(--purple)"></span> Planned / announced</div>
+          <div class="row"><span class="swatch line" style="background:var(--green)"></span> High-confidence limit</div>
+          <div class="row"><span class="swatch line" style="background:var(--orange)"></span> Medium-confidence limit</div>
+          <div class="row"><span class="swatch line" style="background:var(--grey);border-bottom:2px dashed #9aa6b3"></span> Inferred / low-confidence</div>
+          <div class="row"><span class="swatch" style="background:transparent;border:2px solid var(--yellow)"></span> Needs field verification</div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="disc">
+          Speed limits and camera locations must be verified against posted road
+          signs and official NTSA/KeNHA notices. Camera points are
+          <b>landmark anchors</b>, not confirmed camera coordinates. For research
+          and civic-data use only.
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="data.js"></script>
+<script>
+const C = {green:'#2ecc71',orange:'#f39c12',red:'#e74c3c',grey:'#7f8c9a',
+           purple:'#9b59b6',yellow:'#f1c40f'};
+
+const map = L.map('map',{zoomControl:true}).setView([-1.286,36.84],11);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19,subdomains:'abcd'
+}).addTo(map);
+
+function confColor(p){
+  const lvl=(p.confidence_level||'').toLowerCase();
+  if(lvl==='high')return C.green; if(lvl==='medium')return C.orange; return C.grey;
+}
+function baseColor(p){
+  if((p.enforcement_status||'')==='planned')return C.purple;
+  if(String(p.camera_present)==='true'||p._layer==='camera'||p.zone_type==='camera_enforced')return C.red;
+  if((p.zone_type||'')==='inferred')return C.grey;
+  return confColor(p);
+}
+const isDashed=p=>(p.zone_type==='inferred')||((p.confidence_level||'').toLowerCase()==='low');
+const needsCheck=p=>(p.verification_status||'')==='needs_field_check';
+
+function speedText(p){
+  if(p.speed_limit_kmh!=null) return p.speed_limit_kmh+' <small>km/h</small>';
+  if(p.speed_limit_min_kmh!=null&&p.speed_limit_max_kmh!=null)
+    return p.speed_limit_min_kmh+'–'+p.speed_limit_max_kmh+' <small>km/h (range)</small>';
+  return '<small>limit unknown</small>';
+}
+function badge(p){
+  const lvl=(p.confidence_level||'').toLowerCase();
+  const col=lvl==='high'?C.green:lvl==='medium'?C.orange:C.grey;
+  return `<span class="badge" style="background:${col}22;color:${col};border:1px solid ${col}66">`
+        +`${p.confidence_level||'?'} · ${p.confidence_score??'?'}</span>`;
+}
+function esc(s){return (s==null?'':String(s)).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+
+function popup(p){
+  const camStatus = (String(p.camera_present)==='true'||p._layer==='camera')
+      ? `${esc(p.camera_type||'unknown')} · ${esc(p.active_status||p.enforcement_status||'reported')}`
+      : 'none recorded';
+  const src = p.source_url
+      ? `<a href="${esc(p.source_url)}" target="_blank" rel="noopener">${esc(p.source_name||'source')}</a>`
+      : esc(p.source_name||'—');
+  const conf = p.confidence_score!=null?p.confidence_score:0;
+  const note = p.notes?`<div class="note">⚠ ${esc(p.notes)}</div>`:'';
+  return `<div class="pop">
+    <h3>${esc(p.location_name||p.section_name||p.road_name||'Segment')}</h3>
+    <div class="road">${esc(p.road_name||'')}${p.road_number?' · '+esc(p.road_number):''}${p.corridor_name?' · '+esc(p.corridor_name):''}</div>
+    <div class="big">${speedText(p)}</div>
+    ${badge(p)}
+    <div class="conf-bar"><i style="width:${conf}%;background:${confColor(p)}"></i></div>
+    <table>
+      <tr><td class="k">Camera</td><td>${camStatus}</td></tr>
+      <tr><td class="k">Zone type</td><td>${esc(p.zone_type||'—')}</td></tr>
+      <tr><td class="k">Verify</td><td>${esc(p.verification_status||'—')}</td></tr>
+      <tr><td class="k">Precision</td><td>${esc(p.coordinate_precision||p.geometry_anchor||'—')}</td></tr>
+      <tr><td class="k">Source</td><td>${src} <span style="color:var(--faint)">(${esc(p.source_type||'?')})</span></td></tr>
+      <tr><td class="k">Source date</td><td>${esc(p.source_date||p.date_accessed||'—')}</td></tr>
+      <tr><td class="k">Last verified</td><td>${esc(p.last_verified||'not yet field-verified')}</td></tr>
+    </table>${note}</div>`;
+}
+
+let zoneLayer, camLayer;
+function buildZones(){
+  zoneLayer=L.geoJSON(window.SPEED_ZONES,{
+    style:f=>{const p=f.properties;return{color:baseColor(p),weight:5,opacity:.85,
+        dashArray:isDashed(p)?'8 7':null};},
+    pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:8,color:baseColor(f.properties),
+        weight:2,fillColor:baseColor(f.properties),fillOpacity:.35}),
+    onEachFeature:(f,l)=>{l.bindPopup(popup(f.properties),{maxWidth:320});
+        if(needsCheck(f.properties)&&l.setStyle)
+          l.setStyle({});}
+  });
+}
+function camIcon(p){
+  const col=baseColor(p);
+  const ring=needsCheck(p)?C.yellow:col;
+  return L.divIcon({className:'',iconSize:[20,20],iconAnchor:[10,10],
+    html:`<div style="width:18px;height:18px;border-radius:50%;background:${col};
+          border:2.5px solid ${ring};box-shadow:0 0 0 2px #0e1116,0 0 8px ${col}aa;
+          opacity:${0.45+0.0055*(p.confidence_score||0)}"></div>`});
+}
+function buildCameras(){
+  camLayer=L.geoJSON(window.CAMERAS,{
+    pointToLayer:(f,ll)=>L.marker(ll,{icon:camIcon(f.properties)}),
+    onEachFeature:(f,l)=>l.bindPopup(popup(f.properties),{maxWidth:320})
+  });
+}
+buildZones(); buildCameras();
+zoneLayer.addTo(map); camLayer.addTo(map);
+try{const g=L.featureGroup([zoneLayer,camLayer]);map.fitBounds(g.getBounds().pad(0.15));}catch(e){}
+
+// ---- filtering ----
+function activeConf(){return [...document.querySelectorAll('.fConf:checked')].map(c=>c.value);}
+function pass(p){
+  const conf=activeConf();
+  if(!conf.includes((p.confidence_level||'').toLowerCase()))return false;
+  const st=document.getElementById('fSource').value;
+  if(st && (p.source_type||'')!==st)return false;
+  const vc=document.getElementById('fVehicle').value;
+  if(vc && (p.vehicle_class||'')!==vc)return false;
+  const q=document.getElementById('search').value.trim().toLowerCase();
+  if(q){
+    const hay=[p.road_name,p.corridor_name,p.location_name,p.section_name,p.from_place,p.to_place,p.nearest_landmark]
+      .filter(Boolean).join(' ').toLowerCase();
+    if(!hay.includes(q))return false;
+  }
+  return true;
+}
+function apply(){
+  let shown=0;
+  if(zoneLayer){map.removeLayer(zoneLayer);}
+  if(camLayer){map.removeLayer(camLayer);}
+  buildZones();buildCameras();
+  if(document.getElementById('lyrZones').checked){
+    zoneLayer.eachLayer(l=>{if(pass(l.feature.properties)){l.addTo(map);shown++;}});
+  }
+  if(document.getElementById('lyrCameras').checked){
+    camLayer.eachLayer(l=>{if(pass(l.feature.properties)){l.addTo(map);shown++;}});
+  }
+  document.getElementById('resultCount').textContent=shown+' feature(s) shown';
+}
+['change','keyup'].forEach(ev=>{
+  document.getElementById('search').addEventListener(ev,apply);
+  document.getElementById('fSource').addEventListener(ev,apply);
+  document.getElementById('fVehicle').addEventListener(ev,apply);
+});
+document.querySelectorAll('.fConf,#lyrZones,#lyrCameras').forEach(c=>c.addEventListener('change',apply));
+document.getElementById('legendToggle').addEventListener('click',()=>{
+  const b=document.getElementById('legendBody');
+  b.style.display=b.style.display==='none'?'block':'none';
+});
+document.getElementById('burger').addEventListener('click',()=>document.getElementById('side').classList.toggle('open'));
+apply();
+</script>
+</body>
+</html>

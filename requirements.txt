@@ -1,0 +1,16 @@
+# --- MVP pipeline ---
+# The core pipeline (geocode -> validate -> build_geojson) uses ONLY the Python
+# standard library, so it runs on a clean Python 3.8+ with nothing installed.
+# The interactive map (app/index.html) needs only a browser.
+
+# --- Optional: online landmark geocoding (geocode_locations.py --online) ---
+geopy>=2.4
+
+# --- Optional: Phase 2 (real road geometry + spatial ops) ---
+# Uncomment when you start replacing landmark-anchor geometry with traced
+# OSM / KeNHA centrelines and doing buffering / spatial joins.
+# geopandas>=0.14
+# shapely>=2.0
+# pandas>=2.0
+# osmnx>=1.9
+# folium>=0.16

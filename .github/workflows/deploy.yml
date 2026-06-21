@@ -1,0 +1,51 @@
+name: Build &amp; deploy map to GitHub Pages
+
+# Runs on every push to main (and lets you trigger manually).
+# It rebuilds the GeoJSON + app/data.js from the CSVs, then publishes app/.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # geocode -> validate -> build. If the data fails validation,
+      # this step exits non-zero and the deploy is blocked. That's intentional:
+      # a bad dataset never reaches the public site.
+      - name: Build data and map
+        run: |
+          chmod +x run.sh
+          ./run.sh
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: app
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
